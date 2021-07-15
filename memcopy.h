@@ -1,4 +1,4 @@
-//===================== Copyright © 2017, Jared Ryan Bills =====================//
+//===================== Copyright © 2017-2021, Jared Ryan Bills =====================//
 //    This program is free software: you can redistribute it and/or modify	//
 //    it under the terms of the GNU Lesser General Public License as published	//
 //    by the Free Software Foundation, either version 3 of the License, or	//
@@ -37,70 +37,39 @@ inline void * memcopy64(void *, void *, const size_t);
 //			a_src - Source Address to copy from
 //			a_byteLen - Number of bytes to copy
 //Return:		Address of destination buffer/structure (legacy compatibility).
-//TODO:			Address in-built CPU features for faster memory vector operations.
-//			Address memory alignment
+//TODO:			Utilize in-built CPU features for faster memory vector and page operations.
+//			Utilize memory alignment
 inline void * memcopy(void * a_dest, void * a_src, const size_t a_byteLen) {
-	if (a_byteLen & 0x7)
-		memcopy64(a_dest, a_src, a_byteLen);
-	else if (a_byteLen & 0x3) {
-		void * dest = a_dest;
-		void * src = a_src;
-		size_t len = a_byteLen;
-		if (len > 8) {
-			size_t offset = len & ~(uint64)(0x7);
-			memcopy64(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x7;
-		}
-		memcopy32(dest, src, len);
+	if (!a_byteLen)
+		return a_dest = NULL;
+	size_t len = a_byteLen;
+	size_t offset, totalOffset = 0;
+	if (len > 111b && _BUS_SIZE >= sizeof(uint64)) {
+		offset = len & ~(size_t)(111b);
+		//Uncomment if you're reworking for higher bus sizes or vectors
+		memcopy64( /* (void *)((size_t)( */ a_dest /* ) + totalOffset) */ , /* (void *)((size_t)( */a_src /* ) + totalOffset) */ , offset);
+		totalOffset+=offset;
+		len-=totalOffset;
 	}
-	else if (a_byteLen & 0x1) {
-		void * dest = a_dest;
-		void * src = a_src;
-		size_t len = a_byteLen;
-		if (len > 8) {
-			size_t offset = len & ~(size_t)(0x7);
-			memcopy64(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x7;
-		}
-		if (len > 4) {
-			size_t offset = len & ~(size_t)(0x3);
-			memcopy32(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x3;
-		}
-		memcopy16(dest, src, len);
+	if (len > 11b && _BUS_SIZE >= sizeof(uint32)) {
+		offset = len & ~(size_t)(11b);
+		memcopy32((void *)((size_t)(a_dest) + totalOffset), (void *)((size_t)(a_src) + totalOffset), offset);
+		totalOffset += offset;
+		len = a_byteLen - totalOffset;
 	}
-	else {
-		void * dest = a_dest;
-		void * src = a_src;
-		size_t len = a_byteLen;
-		if (len > 8) {
-			size_t offset = len & ~(size_t)(0x7);
-			memcopy64(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x7;
-		}
-		if (len > 4) {
-			size_t offset = len & ~(size_t)(0x3);
-			memcopy32(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x3;
-		}
-		if (len > 2) {
-			size_t offset = len & ~(size_t)(0x1);
-			memcopy16(dest, src, offset);
-			dest = (void *)((size_t)(a_dest) + offset);
-			src = (void *)((size_t)(a_src) + offset);
-			len = a_byteLen & 0x1;
-		}
-		memcopy8(dest, src, len);
+	if (len > 1b && _BUS_SIZE >= sizeof(uint16)) {
+		offset = len & ~(size_t)(1b);
+		memcopy16((void *)((size_t)(a_dest) + totalOffset), (void *)((size_t)(a_src) + totalOffset), offset);
+		totalOffset += offset;
+		len = a_byteLen - totalOffset;
+	}
+	//Doing a sanity check in case we're insane enough to run this on a 7-bit-based-byte architecture or something similar
+	if (len && _BUS_SIZE >= sizeof(uint8)) {
+		offset = len;
+		memcopy8((void *)((size_t)(a_dest) + totalOffset), (void *)((size_t)(a_src) + totalOffset), offset);
+		//Don't need these if unused.
+		//totalOffset += offset;
+		//len = a_byteLen - totalOffset;
 	}
 	return a_dest;
 }
@@ -112,10 +81,10 @@ inline void * memcopy(void * a_dest, void * a_src, const size_t a_byteLen) {
 //			a_src - Source Address to copy from
 //			a_byteLen - Number of bytes to copy
 //Return:		Address of destination buffer/structure (legacy compatibility).
-//TODO:			Address in-built CPU features for faster memory vector operations.
-//			Address memory alignment
+//TODO:			Utilize in-built CPU features for faster memory vector and page operations.
+//			Utilize memory alignment
 inline void * memcopy8(void * a_dest, void * a_src, const size_t a_byteLen) {
-	for (uintptr c = 0; c < a_byteLen; ++c)
+	for (uintptr c = 0; c < a_byteLen; c += sizeof(uint8))
 		*((uint8 *)(a_dest)+c) = *((uint8 *)(a_src)+c);
 	return a_dest;
 }
@@ -127,11 +96,11 @@ inline void * memcopy8(void * a_dest, void * a_src, const size_t a_byteLen) {
 //			a_src - Source Address to copy from
 //			a_byteLen - Number of bytes to copy
 //Return:		Address of destination buffer/structure (legacy compatibility).
-//TODO:			Address in-built CPU features for faster memory vector operations.
-//			Address memory alignment
+//TODO:			Utilize in-built CPU features for faster memory vector and page operations.
+//			Utilize memory alignment
 inline void * memcopy16(void * a_dest, void * a_src, const size_t a_byteLen) {
 	assert(!(a_byteLen & 0x1));
-	for (uintptr c = 0; c < a_byteLen; c += 2)
+	for (uintptr c = 0; c < a_byteLen; c += sizeof(uint16))
 		*((uint16 *)(a_dest)+c) = *((uint16 *)(a_src)+c);
 	return a_dest;
 }
@@ -143,11 +112,11 @@ inline void * memcopy16(void * a_dest, void * a_src, const size_t a_byteLen) {
 //			a_src - Source Address to copy from
 //			a_byteLen - Number of bytes to copy
 //Return:		Address of destination buffer/structure (legacy compatibility).
-//TODO:			Address in-built CPU features for faster memory vector operations.
-//			Address memory alignment
+//TODO:			Utilize in-built CPU features for faster memory vector and page operations.
+//			Utilize memory alignment
 inline void * memcopy32(void * a_dest, void * a_src, const size_t a_byteLen) {
 	assert(!(a_byteLen & 0x3));
-	for (uintptr c = 0; c < a_byteLen; c += 4)
+	for (uintptr c = 0; c < a_byteLen; c += sizeof(uint32))
 		*((uint32 *)(a_dest)+c) = *((uint32 *)(a_src)+c);
 	return a_dest;
 }
@@ -159,14 +128,13 @@ inline void * memcopy32(void * a_dest, void * a_src, const size_t a_byteLen) {
 //			a_src - Source Address to copy from
 //			a_byteLen - Number of bytes to copy
 //Return:		Address of destination buffer/structure (legacy compatibility).
-//TODO:			Address in-built CPU features for faster memory vector operations.
-//			Address memory alignment
+//TODO:			Utilize in-built CPU features for faster memory vector and page operations.
+//			Utilize memory alignment
 inline void * memcopy64(void * a_dest, void * a_src, const size_t a_byteLen) {
 	assert(!(a_byteLen & 0x7));
-	for (uintptr c = 0; c < a_byteLen; c += 8)
+	for (uintptr c = 0; c < a_byteLen; c += sizeof(uint64))
 		*((uint64 *)(a_dest)+c) = *((uint64 *)(a_src)+c);
 	return a_dest;
 }
 
 #endif
-

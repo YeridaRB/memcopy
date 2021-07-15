@@ -26,6 +26,8 @@
 #include <vector.h>
 #endif
 
+#define _BUS_SIZE					(sizeof(size_t))
+
 typedef uintptr_t					uintptr;
 typedef intptr_t					intptr;
 typedef uint8_t						uint8;
